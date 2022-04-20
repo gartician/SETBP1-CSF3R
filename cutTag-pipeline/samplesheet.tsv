@@ -1,0 +1,17 @@
+sample	R1	R2	mark	condition	igg
+DoxB_1_H3K27Ac	data/raw/DoxB_1_H3K27Ac_R1.fastq.gz	data/raw/DoxB_1_H3K27Ac_R2.fastq.gz	H3K27Ac	DoxB	DoxB_1_IgG
+DoxB_1_H3K4me1	data/raw/DoxB_1_H3K4me1_R1.fastq.gz	data/raw/DoxB_1_H3K4me1_R2.fastq.gz	H3K4me1	DoxB	DoxB_1_IgG
+DoxB_1_H3K4me3	data/raw/DoxB_1_H3K4me3_R1.fastq.gz	data/raw/DoxB_1_H3K4me3_R2.fastq.gz	H3K4me3	DoxB	DoxB_1_IgG
+DoxB_1_IgG	data/raw/DoxB_1_IgG_R1.fastq.gz	data/raw/DoxB_1_IgG_R2.fastq.gz	IgG	DoxB	DoxB_1_IgG
+DoxB_2_H3K27Ac	data/raw/DoxB_2_H3K27Ac_R1.fastq.gz	data/raw/DoxB_2_H3K27Ac_R2.fastq.gz	H3K27Ac	DoxB	DoxB_2_IgG
+DoxB_2_H3K4me1	data/raw/DoxB_2_H3K4me1_R1.fastq.gz	data/raw/DoxB_2_H3K4me1_R2.fastq.gz	H3K4me1	DoxB	DoxB_2_IgG
+DoxB_2_H3K4me3	data/raw/DoxB_2_H3K4me3_R1.fastq.gz	data/raw/DoxB_2_H3K4me3_R2.fastq.gz	H3K4me3	DoxB	DoxB_2_IgG
+DoxB_2_IgG	data/raw/DoxB_2_IgG_R1.fastq.gz	data/raw/DoxB_2_IgG_R2.fastq.gz	IgG	DoxB	DoxB_2_IgG
+DoxWdB_1_H3K27Ac	data/raw/DoxWdB_1_H3K27Ac_R1.fastq.gz	data/raw/DoxWdB_1_H3K27Ac_R2.fastq.gz	H3K27Ac	DoxWdB	DoxWdB_1_IgG
+DoxWdB_1_H3K4me1	data/raw/DoxWdB_1_H3K4me1_R1.fastq.gz	data/raw/DoxWdB_1_H3K4me1_R2.fastq.gz	H3K4me1	DoxWdB	DoxWdB_1_IgG
+DoxWdB_1_H3K4me3	data/raw/DoxWdB_1_H3K4me3_R1.fastq.gz	data/raw/DoxWdB_1_H3K4me3_R2.fastq.gz	H3K4me3	DoxWdB	DoxWdB_1_IgG
+DoxWdB_1_IgG	data/raw/DoxWdB_1_IgG_R1.fastq.gz	data/raw/DoxWdB_1_IgG_R2.fastq.gz	IgG	DoxWdB	DoxWdB_1_IgG
+DoxWdB_2_H3K27Ac	data/raw/DoxWdB_2_H3K27Ac_R1.fastq.gz	data/raw/DoxWdB_2_H3K27Ac_R2.fastq.gz	H3K27Ac	DoxWdB	DoxWdB_2_IgG
+DoxWdB_2_H3K4me1	data/raw/DoxWdB_2_H3K4me1_R1.fastq.gz	data/raw/DoxWdB_2_H3K4me1_R2.fastq.gz	H3K4me1	DoxWdB	DoxWdB_2_IgG
+DoxWdB_2_H3K4me3	data/raw/DoxWdB_2_H3K4me3_R1.fastq.gz	data/raw/DoxWdB_2_H3K4me3_R2.fastq.gz	H3K4me3	DoxWdB	DoxWdB_2_IgG
+DoxWdB_2_IgG	data/raw/DoxWdB_2_IgG_R1.fastq.gz	data/raw/DoxWdB_2_IgG_R2.fastq.gz	IgG	DoxWdB	DoxWdB_2_IgG

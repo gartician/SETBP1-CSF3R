@@ -1,0 +1,8 @@
+name: setbp1
+channels:
+  - defaults
+  - bioconda
+  - conda-forge
+dependencies:
+  - ucsc-liftover
+  - bedtools
