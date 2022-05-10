@@ -1,0 +1,6 @@
+fastqs,sample,library_type
+/home/groups/MaxsonLab/input-data/scRNAseq/SCL201218JM/210119_NS500681_0472_AHKJV3BGXH/Unaligned/SCL201218JM/SI-GA-A9_1,SCL201218JM_DMSO_mRNA,Gene Expression
+/home/groups/MaxsonLab/input-data/scRNAseq/SCL201218JM/210119_NS500681_0472_AHKJV3BGXH/Unaligned/SCL201218JM/SI-GA-A9_2,SCL201218JM_DMSO_mRNA,Gene Expression
+/home/groups/MaxsonLab/input-data/scRNAseq/SCL201218JM/210119_NS500681_0472_AHKJV3BGXH/Unaligned/SCL201218JM/SI-GA-A9_3,SCL201218JM_DMSO_mRNA,Gene Expression
+/home/groups/MaxsonLab/input-data/scRNAseq/SCL201218JM/210119_NS500681_0472_AHKJV3BGXH/Unaligned/SCL201218JM/SI-GA-A9_4,SCL201218JM_DMSO_mRNA,Gene Expression
+/home/groups/MaxsonLab/input-data/scRNAseq/SCL201218JM/210119_NS500681_0472_AHKJV3BGXH/Unaligned/SCL201218JM/RPI1,SCL201218JM_DMSO_ADT,Antibody Capture
