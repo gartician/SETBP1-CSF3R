@@ -1,0 +1,532 @@
+---
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    code_folding: hide
+    theme: cerulean
+    toc: yes
+    number_sections: true
+    toc_depth: 2
+    toc_float:
+      collapsed: yes
+params:
+  inputobs: "PATH/TO/OBS.tsv"
+  seurat: "seurat_path"
+  genes: "string of genes"
+  contrast: "None"
+  cluster: "predicted.id"
+  wave: "current wave"
+  out_dir: "/path/to/out"
+  baseline: "sample"
+  samples: "list of samples"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, fig.width = 8, fig.height = 6)
+
+#load or install packages
+packages_to_work <- c("Seurat","dplyr","ggplot2","scales","tidyr","gridExtra","xtable","rlang","plotly","ggrepel","ggpubr","DT")
+
+is_installed <- function(mypkg){ is.element(mypkg, installed.packages()[,1])}
+load_or_install<-function(package_names){
+	#https://www.r-bloggers.com/2012/05/loading-andor-installing-packages-programmatically/
+	#quick install or load packages
+  for(package_name in package_names)
+  {
+    if(!is_installed(package_name))
+    {
+       install.packages(package_name,repos = "http://cran.us.r-project.org")
+    }
+    library(package_name,character.only=TRUE,quietly=TRUE,verbose=FALSE)
+  }
+}
+
+load_or_install(packages_to_work)
+
+
+contrast <- params$contrast
+
+scvelo_path <- params$inputobs
+seurat <- params$seurat
+genes <- params$genes
+seurat_cluster <- params$cluster
+outdir = paste(getwd(),params$out_dir,sep="/")
+wave = params$wave
+working_names <- params$samples
+base_line <- params$baseline
+```
+
+```{r }
+#functions:
+
+create_dt <- function(x){
+#credit: https://rstudio.github.io/DT/extensions.html
+#creates a searchable table with buttons to export/copy etc.
+  DT::datatable(x,
+                extensions = 'Buttons',
+                options = list(dom = 'Bfrtip',
+                               buttons = c('copy', 'csv', 'excel', 'pdf', 'print')))
+}
+
+
+VlnPlot_stats <- function(seuratObj, group_by, gene_signature, color = NULL){
+  # takes a seurat object and outputs a violin plot with stats (student's t-test)
+  # comparing the means of the different groups given by 'group_by'.
+  # gene_signature is the gene or genes to plot.
+  # color is given to the 'cols' parameter for seurat::VlnPlot
+  
+  # ensure genes from gene_signature are in seuratObj
+  genes_valid <- NULL
+  for (gene in gene_signature){
+	if (gene %in% rownames(seuratObj)){
+		genes_valid <- c(genes_valid, gene)
+	}
+  }
+  
+  # get comparisions from 'group_by' column in seurat objects metadata
+  comparisons <- unique(seuratObj@meta.data[group_by][,1])
+  # retrieve a list of comparisions to make for any amount (except 1) of unique comparisons 
+  comp_list <- list()
+  #loop through all groups in comparisons	
+  for (i in 1:length(comparisons)){
+		# loop through all comparisions that can be made from current (i_th) group
+	  for(j in (i+1):length(comparisons)){
+		# if it runs out of groups, then break the loop and return to outer loop
+		if (j > length(comparisons)){
+		 
+		  break
+		}
+		# otherwise, add a vector of groups to compare to the comparision list
+		comp_list[[paste(i,j,sep="_")]] <- c(comparisons[i],comparisons[j])
+
+		}
+	}
+  
+  plot_case1 <- function(signature, y_max = NULL, comparisions = comparisons){
+    # takes a signature (gene) , a max y value, and a comparision
+	# and returns a seurat::VlnPlot violin plot with stat_compare_means 
+    VlnPlot(seuratObj, features = signature,
+            pt.size = 0, 
+            group.by = group_by, 
+            y.max = y_max, # add the y-axis maximum value - otherwise p-value hidden
+            cols = color
+    ) + stat_compare_means(comparisons = comp_list, label = "p.value", method = "t.test")  
+  }
+  plot_list <- list()
+  # loop through genes/markers in gene_signature and call the above function
+  # to add the plot to the plot_list
+  for (gene in genes_valid) {
+    max_gene_exp <- max(FetchData(seuratObj, vars = gene))
+    plot_list[[gene]] <- plot_case1(signature = gene, y_max = max_gene_exp + 3) #plus three to give room for the stats
+  }
+  #return grid of plot
+  cowplot::plot_grid(plotlist = plot_list)
+ 
+}
+
+```
+
+# RNA velocity 
+
+RNA velocity leverages unspliced pre-mRNAs and mature, spliced mRNAs can be distinguished in common single-cell RNA-seq protocols, the former detectable by the presence of introns.   For each gene, a steady-state-ratio of pre-mature (unspliced) and mature (spliced) mRNA counts is fitted, which constitutes a constant transcriptional state. Velocities are then obtained as residuals from this ratio. Velocities are vectors in gene expression space and represent the direction and speed of movement of the individual cells.
+
+```{r }
+
+#read in a meta data file that contains information about each cell
+scvelo <- read.delim(paste(getwd(),scvelo_path,sep="/"))
+
+string_to_list <- function (x) {
+	#given a string with spaces as python will give to R.
+	# return the vectorized format by replacing the spaces with commas
+  return(unlist(strsplit(gsub("\\s", ",", x) ,",")))
+}
+
+#genes from the config file
+genes_of_interest <- string_to_list(genes)
+
+```
+
+# Spliced vs Unspliced by Sample
+
+```{r , out.width='100%'}
+par(mfrow=c(1,1))
+
+get_percentage <- function(df,groupby){
+  #input: 
+    #df     -> dataframe from scvelo (scv.obs)
+    #groupby -> choose what column to subset the percentages by
+  #returns ggplot  percent spliced and unspliced
+  
+  #make df into long format
+  df <- reshape(df, direction = "long", varying = list(c("initial_size_spliced","initial_size_unspliced")), v.names = "intial_size", timevar = "splice_status", times = c("initial_size_spliced","initial_size_unspliced")) 
+
+  
+ #change the names for readability
+df$splice_status <- gsub("initial_size_unspliced","unspliced",gsub("initial_size_spliced","spliced",df$splice_status))
+
+#combine group names with splice_status to make a place holder for actual percentages
+df$group_percent <- paste(df[[groupby]],df$splice_status,sep="_")
+
+#get max height for each group
+# get the percentage for each group
+  DF_list <- list()
+  Max_H <- 0
+  for(group in unique(df[[groupby]])){
+    cur_set <- df[which(df[[groupby]] == group),]
+    Max_H <- max(Max_H,sum(cur_set[which(cur_set$splice_status == "spliced"),"initial_size"]))
+    spliced <- sum(cur_set[which(cur_set$splice_status == "spliced"),"intial_size"])/sum(cur_set$intial_size)
+    DF_list[[group]] <- spliced
+  }
+  
+#go through place holder and substitute percentages
+  new_prop <- df$group_percent
+  for (cell in unique(df$group_percent)){
+    n_len <- length(unlist(strsplit(cell,"_")))
+    group <- paste(unlist(strsplit(cell,"_"))[1:(n_len-1)],collapse = "_")
+    status <- unlist(strsplit(cell,"_"))[n_len]
+    spliced_prop <- round(DF_list[[group]]*100,1)
+    unspliced_prop <- round((1-DF_list[[group]])*100,1)
+    new_prop <- gsub(paste(group,"spliced",sep="_"),paste0(spliced_prop,"%"),gsub(paste(group,"unspliced",sep="_"),paste0(unspliced_prop,"%"),new_prop))
+  }
+  Max_H <- Max_H + (0.1*Max_H)
+  df$GP <- new_prop
+  df$GroupBY <- df[[groupby]]
+  ggplot(df, aes(x = splice_status, y = intial_size, fill = splice_status )) + geom_bar(stat = "identity")  + facet_wrap(~GroupBY) + theme(axis.text.x = element_text(angle = 50, vjust = 0.5, hjust=1)) + ylab("counts") + geom_text(aes(x=splice_status,y=Max_H,label = GP))
+  
+}
+get_percentage(scvelo, groupby = "samples")
+```
+
+
+# Velocity UMAPS
+
+
+## No batch correction  {.tabset .tabset-fade .tabset-pills}
+
+
+### Stream
+
+```{r  , out.width='100%'}
+fig_path <- paste(outdir,"figures",sep="/")
+
+file_path <- paste(fig_path,"scvelo_scvelo_stream.png",sep="/")
+if(file.exists(file_path)){   knitr::include_graphics(path = file_path) } 
+
+```
+
+### Confidence  
+
+
+* The speed or rate of differentiation is given by the length of the velocity vector.
+* The coherence of the vector field (i.e., how a velocity vector correlates with its neighboring velocities) provides a measure of confidence.
+
+```{r  , out.width='100%'}
+
+file_path <- paste(fig_path,"scvelo_scatter_confidence.png",sep="/")
+if(file.exists(file_path)){   knitr::include_graphics(path = file_path) } 
+```
+
+```{r  , out.width='100%'}
+
+file_path <- paste(fig_path,"scvelo_scvelo_stream.png",sep="/")
+if(file.exists(file_path)){   knitr::include_graphics(path = file_path) } 
+```
+
+
+### DPT Pseudotime and Latent Time
+
+* DPT is defined as the ordering of cells by comparing their probabilities of differentiating toward different cell fates. https://www.nature.com/articles/nmeth.3971.pdf?origin=ppub
+
+* Latent Time: Gene-specific latent timepoints obtained from the dynamical model are coupled to a universal gene-shared latent time, which represents the cell’s internal clock and is based only on its transcriptional dynamics.
+
+
+```{r  , out.width='100%'}
+
+file_path <- paste(fig_path,"scvelo_pseudo_latent_time.png",sep="/")
+if(file.exists(file_path)){   knitr::include_graphics(path = file_path) } 
+```
+
+
+## Batch balanced KNN (using samples as batches)  {.tabset .tabset-fade .tabset-pills}
+
+```{r  , out.width='100%'}
+
+file_path <- paste(fig_path,"scvelo_scvelo_stream_batch.png",sep="/")
+if(file.exists(file_path)){   knitr::include_graphics(path = file_path) } 
+```
+
+Batch balanced kNN alters the kNN procedure to identify each cell’s top neighbours in each batch separately instead of the entire cell pool with no accounting for batch. Aligns batches in a quick and lightweight manner. https://scanpy.readthedocs.io/en/stable/external/scanpy.external.pp.bbknn.html https://academic.oup.com/bioinformatics/article/36/3/964/5545955
+
+# Individual samples {.tabset .tabset-fade .tabset-pills}
+
+
+```{r, results = "asis"}
+# names of samples 
+working_names <- string_to_list(working_names)
+
+
+for (i in 1:length(working_names)){
+  
+  cur_sample <- working_names[i]
+  cur_path <- paste(outdir,cur_sample,"figures",sep="/")
+  
+  #proporions plot
+  file_path <- paste(cur_path,"proportions.png",sep="/")
+  if(file.exists(file_path)){
+    cat("## ",cur_sample,"\n\n")
+    cat('\n![Proportions](',file_path,')\n')
+    cat('\n')
+  }
+  # scatter confidence plot
+  file_path <- paste(cur_path,"scvelo_scatter_confidence.png",sep="/")
+  if(file.exists(file_path)){
+    cat('\n![Scatter confidence](',file_path,')\n')
+    cat('\n')
+  }
+  # velocity streams on umap plot
+  file_path <- paste(cur_path,"scvelo_scvelo_stream.png",sep="/")
+  if(file.exists(file_path)){
+    cat('\n![Stream](',file_path,')\n')
+    cat('\n')
+  }
+}
+```
+
+# Phase Portrait and Violins
+
+Transcriptional induction for a particular gene results in an increase of (newly transcribed) precursor unspliced mRNAs while, conversely, repression or absence of transcription results in a decrease of unspliced mRNAs. Spliced mRNAs is produced from unspliced mRNA and follows the same trend with a time lag. Time is a hidden/latent variable. Thus, the dynamics needs to be inferred from what is actually measured: spliced and unspliced mRNAs as displayed in the phase portrait.
+
+[Animation](https://user-images.githubusercontent.com/31883718/80227452-eb822480-864d-11ea-9399-56886c5e2785.gif)
+
+```{r error = FALSE}
+
+#read in seurat object 
+seuratObj <- readRDS(paste(getwd(),"..",seurat,sep="/"))
+# working with the 'integrated' object
+seuratObj <- seuratObj[['integrated']]
+
+if (contrast == 'None'){
+	contrast <- "orig.ident"
+	Order_plot <- sort(unique(seuratObj[["orig.ident"]][,1]))
+} else {
+	Order_plot <- sort(unique(seuratObj[[contrast]][,1]))
+}
+#changing seurat default assay to "RNA" 
+DefaultAssay(seuratObj) <- "RNA"
+# getting the unique clusters from the seurat object
+unique_clusters <- unique(seuratObj[[seurat_cluster]][,1])
+#make the contrast a factor 
+seuratObj[[contrast]] <- factor(x = seuratObj[[contrast]][,1],levels = Order_plot)
+
+#make the plots for later
+for (clust in sort(unique_clusters)){
+	keep_cells <- rownames(seuratObj[[seurat_cluster]])[which(seuratObj[[seurat_cluster]] == clust)]
+	sub_seurat <- subset(seuratObj, cells = keep_cells)
+	for (gene in genes_of_interest){
+		if (!(gene %in% rownames(sub_seurat))){
+			next
+		}
+		# violin stat plot
+		file_path <- paste(fig_path,sprintf("VlnPlot_%s_%s_exp.png",clust,gene),sep="/")
+		if(!(file.exists(file_path))){
+			p_plot <- try(pplot <- VlnPlot_stats(sub_seurat, group_by = contrast, gene_signature = gene))
+			if(class(p_plot) != "try-error"){
+				ggsave(basename(file_path), plot = p_plot, path = dirname(file_path), device = "png")
+			}
+		}
+		# feature plot
+		file_path <- paste(fig_path,sprintf("FeaturePlot_%s_%s_exp.png",clust,gene),sep="/")
+		if(!(file.exists(file_path))){
+			p_plot <- try(pplot <- FeaturePlot(sub_seurat, features = gene, split.by = contrast))
+			if(class(p_plot) != "try-error"){
+				ggsave(basename(file_path), plot = p_plot, path = dirname(file_path), device = "png")
+			}
+		}
+	}
+	
+	
+	
+}
+
+```
+
+
+## Cell Types {.tabset .tabset-fade .tabset-pills}
+
+```{r  results='asis'}
+
+# loop through each of the unique clusters
+for (clust in sort(unique_clusters)){
+	
+	
+	cat("\n### Cluster: ",clust," {.tabset .tabset-fade .tabset-pills}\n")
+	
+	
+	file_path <- paste(fig_path,sprintf("bar_plot_%s_clust.png",clust),sep="/")
+	if(!(file.exists(file_path))){
+		cur_prop <- subset(scvelo, cluster == clust)
+		
+		p_plot <- try(get_percentage(cur_prop, groupby = "samples"))
+		if(class(p_plot) != "try-error"){
+			ggsave(basename(file_path), plot = p_plot, path = dirname(file_path), device = "png")
+		}
+	}
+	if(file.exists(file_path)){
+		cat('\n![Bar Plot](',file_path,')\n\n')
+	}
+	
+	
+	##### gene specific 
+	for (i in 1:length(genes_of_interest)){
+		cur_gene <- genes_of_interest[i]
+		if (!(cur_gene %in% rownames(sub_seurat))){
+			next
+		}
+		cat("\n\n#### ",cur_gene,"\n\n")
+		#scatter velocity plot
+		file_path <- paste(fig_path,sprintf("%s/violin_genes_%s_%s.png",gsub("/",".",clust),"velocity",cur_gene),sep="/")
+		if(file.exists(file_path)){
+			cat('\n![Violin](',file_path,')\n\n')
+		}
+		#heatmap velocity plot
+		file_path <- paste(fig_path,sprintf("%s/velocity_%s_heatmap.png",gsub("/",".",clust),cur_gene),sep="/")
+		if(file.exists(file_path)){
+			
+			cat('\n![Heatmap](',file_path,')\n\n')
+		}
+		
+		#Phase plot
+		file_path <- paste(fig_path,sprintf("scvelo_scatter_gene_cluster_%s_%s.png",cur_gene,gsub("/",".",clust)),sep="/")
+		if(file.exists(file_path)){
+			
+			cat('\n![Phase Scatter](',file_path,')\n\n')
+		}
+		
+		#Phase phase plot
+		file_path <- paste(fig_path,sprintf("scatter_phase_{}_{}.png",cur_gene,gsub("/",".",clust)),sep="/")
+		if(file.exists(file_path)){
+			
+			cat('\n![Phase Scatter](',file_path,')\n\n')
+			cat('\nG1: red, G2M: blue, S: green\n')
+		}
+		
+		# expression plot
+		file_path <- paste(fig_path,sprintf("VlnPlot_%s_%s_exp.png",gsub("/",".",clust),cur_gene),sep="/")
+		if(file.exists(file_path)){
+			
+			cat('\n![Violin Plot](',file_path,')\n\n')
+		}
+		#feature plot
+		file_path <- paste(fig_path,sprintf("FeaturePlot_%s_%s_exp.png",gsub("/",".",clust),cur_gene),sep="/")
+		if(file.exists(file_path)){
+			
+			cat('\n![Feature Plot](',file_path,')\n\n')
+		}
+	}
+
+}
+```
+
+
+# Velocity DE scores table 
+
+
+This applies a differential expression test (Welch t-test with overestimated variance to be conservative) on velocity expression, to find genes in a cluster that show dynamics that is transcriptionally regulated differently compared to all other clusters (e.g. induction in that cluster and homeostasis in remaining population).
+
+A positive high score indicates that the velocity of that gene in the cluster is high compared to that gene in other clusters.
+
+
+```{r ta_vel, warning = F}
+v_table <- read.delim(paste(fig_path,"../analysis","cluster_condition_velocity.tsv",sep="/"))
+v_table <- v_table[,-1]
+create_dt(v_table)
+```
+
+## Wilcoxon rank sum test for RNA expression and Velocity:   `r base_line` vs rest {.tabset .tabset-fade .tabset-pills}
+
+
+```{r warning = F}
+df_markers_list <- list()
+##### collect markers table for each cluster
+for (clust in sort(unique_clusters)){	
+	
+	
+	DE_path <- paste(fig_path,"..",sprintf("analysis/%s/wilcoxon_%s_RNA_velocity_merged.tsv",gsub("/",".",clust),base_line),sep="/")
+	if (file.exists(DE_path)){
+		df_marker <- read.delim(DE_path)
+		df_marker <- df_marker[,-1] #remove index column (just numbers; not informative)
+		df_marker[which(unlist(apply(df_marker, 1,function(x) !any(is.na(x))))),]##remove any NA
+		df_markers_list[[as.character(clust)]] <- df_marker
+	}
+}
+
+```
+
+```{r  results = 'asis'}
+
+#loop through to make DT for each cluster
+# from https://bookdown.org/yihui/rmarkdown-cookbook/child-document.html#child-document
+res_dt <- sapply(names(df_markers_list), function(x) {
+		knitr::knit_child(text = c(
+		'\n## Cluster: "`r x`"\n',
+		'',
+		'```{r }',
+		'create_dt(df_markers_list[[as.character(x)]])',
+		'```',
+		''
+		), envir = environment(),quiet = TRUE)
+	})
+cat(unlist(res_dt),sep = '\n')
+```
+
+# Heatmap of top 5 DE genes per cluster vs rest {.tabset .tabset-fade .tabset-pills}
+
+## Unspliced
+
+```{r , warning = F, results = 'asis', eval = T}
+
+file_path <- paste(fig_path,"heatmapscanpy_Mu_heatmap.png",sep="/")
+if(file.exists(file_path)){
+	cat('\n![Unspliced Heatmap](',file_path,')\n\n')
+}
+```
+
+## Spliced
+
+```{r , warning = F, results = 'asis', eval = T}
+
+file_path <- paste(fig_path,"heatmapscanpy_Ms_heatmap.png",sep="/")
+if(file.exists(file_path)){
+	cat('\n![Spliced Heatmap](',file_path,')\n\n')
+}
+```
+
+
+# Partion-based graph abstration
+
+	* Graph with connectivities (dashed) and transitions (solid/arrows).
+	
+From the paper: https://genomebiology.biomedcentral.com/articles/10.1186/s13059-019-1663-x
+
+"In the conventional undirected case, for each partitioning, we generate a PAGA graph using the “PAGA connectivity measure” defined in Additional file 1: Eq. (11). This measure is a test statistic quantifying the degree of connectivity of two partitions and has a close relation with modularity [20]. For each pair of clusters, PAGA connectivity is the ratio of the number of inter-edges between the clusters normalized with the number of inter-edges expected under random assignment of edges.
+
+In the directed case, in which we typically abstract a “velocity graph” originating from RNA velocity [29], we consider the ratio of arrows Additional file 1: Eq. (14), which are in- and outgoing for each pair of partitions to quantify a tendency of transition between partitions."	
+	
+```{r paga, warning = F, results = 'asis'}
+file_path <- paste(fig_path,"scvelo_PAGA.png",sep="/")
+if(file.exists(file_path)){
+	cat('\n![PAGA](',file_path,')\n\n')
+}
+```
+
+# Session Info
+
+```{r }
+
+sessionInfo()
+
+```
+
+
+
+

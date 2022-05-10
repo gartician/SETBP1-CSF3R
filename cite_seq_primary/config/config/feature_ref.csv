@@ -1,9 +1,0 @@
-id,name,read,pattern,sequence,feature_type
-TotalSeq-A-0063-anti-human-CD45RA-biolegend-304157-Handle,ab_CD45RA,R2,^(BC),TCAATCCTTCCGCTT,Antibody Capture
-TotalSeq-A-0064-anti-human-CD123-biolegend-306037-Handle,ab_CD123,R2,^(BC),CTTCACTCTGTCAGG,Antibody Capture
-TotalSeq-A-0062-anti-human-CD10-biolegend-312231-Handle,ab_CD10,R2,^(BC),CAGCCATTCATTAGG,Antibody Capture
-TotalSeq-A-0060-anti-human-CD90-biolegend-328135-Handle,ab_CD90,R2,^(BC),GCATTGTACGATTCA,Antibody Capture
-TotalSeq-A-0054-anti-human-CD34-biolegend-343537-Handle,ab_CD34,R2,^(BC),GCAGAAATCTCCCTT,Antibody Capture
-TotalSeq-A-0410-anti-human-CD38-biolegend-356635-Handle,ab_CD38,R2,^(BC),CCTATTCCGATTCCG,Antibody Capture
-TotalSeq-A-0169-anti-human-CD366-Tim-3-biolegend-345047-Handle,ab_CD366,R2,^(BC),TGTCCTACCCAACTT,Antibody Capture
-TotalSeq-A-0845-anti-human-CD99-biolegend-371317-Handle,ab_CD99,R2,^(BC),ACCCGTCCCTAAGAA,Antibody Capture
